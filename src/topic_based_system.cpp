@@ -151,6 +151,10 @@ CallbackReturn TopicBasedSystem::on_init(const hardware_interface::HardwareInfo&
       get_hardware_parameter("joint_states_topic", "/robot_joint_states"), rclcpp::SensorDataQoS(),
       [this](const sensor_msgs::msg::JointState::SharedPtr joint_state) { latest_joint_state_ = *joint_state; });
 
+  stop_joint_commands_subscriber_ = node_->create_subscription<std_msgs::msg::Bool>(
+      get_hardware_parameter("stop_joint_commands_topic", "/stop_joint_commands"), rclcpp::QoS(1),
+      [this](const std_msgs::msg::Bool::SharedPtr stop_joint_commands) { stop_joint_commands_ = (*stop_joint_commands).data; });
+
   // if the values on the `joint_states_topic` are wrapped between -2*pi and 2*pi (like they are in Isaac Sim)
   // sum the total joint rotation returned on the `joint_states_` interface
   if (get_hardware_parameter("sum_wrapped_joint_states", "false") == "true")
@@ -272,6 +276,11 @@ hardware_interface::return_type TopicBasedSystem::write(const rclcpp::Time& /*ti
       joint_commands_[POSITION_INTERFACE_INDEX].cbegin(), 0.0,
       [](const auto d1, const auto d2) { return std::abs(d1) + std::abs(d2); }, std::minus<double>{});
   if (diff <= trigger_joint_command_threshold_)
+  {
+    return hardware_interface::return_type::OK;
+  }
+
+  if (stop_joint_commands_)
   {
     return hardware_interface::return_type::OK;
   }
